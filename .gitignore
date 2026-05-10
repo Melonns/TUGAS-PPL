@@ -1,0 +1,55 @@
+# Laravel
+/backend/vendor/
+/backend/.env
+/backend/.env.local
+/backend/.env.*.php
+/backend/.DS_Store
+/backend/Thumbs.db
+/backend/storage/
+/backend/bootstrap/cache/
+/backend/*.log
+/backend/logs/
+/backend/public/uploads/
+/backend/public/storage
+/backend/.vscode/
+/backend/.idea/
+/backend/*.pem
+
+# Node / Frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/build/
+/frontend/.env
+/frontend/.env.local
+/frontend/.env.*.local
+/frontend/.vscode/
+/frontend/.idea/
+/frontend/npm-debug.log
+/frontend/yarn-error.log
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.directory
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.editorconfig
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Misc
+.git/
+.gitkeep
+*.md~
