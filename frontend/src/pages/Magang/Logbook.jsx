@@ -834,6 +834,72 @@ const DailyActivitiesPage = () => {
           </div>
         )}
       </div>
+
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 w-full max-w-2xl">
+          <div className="relative w-full">
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search activities, description, or date..."
+              className="w-full border border-slate-200 rounded-lg py-2.5 px-4 pr-10 text-sm"
+            />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          </div>
+          <button onClick={() => setIsFilterOpen(true)} className={btnSecondary}><Filter className="w-4 h-4" /> Filter</button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button onClick={() => handleOpenForm('add')} className={btnPrimary}><Plus className="w-4 h-4" /> Add Logbook</button>
+        </div>
+      </div>
+
+      {loadingList ? (
+        <div className="py-8 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin mr-2 text-slate-500" /> Loading logbooks...
+        </div>
+      ) : (
+        <div>
+          {(!logbooks || logbooks.length === 0) ? (
+            <div className="p-8 bg-white rounded-lg shadow text-center">
+              <div className="text-lg font-semibold text-slate-700">No logbook entries found</div>
+              <p className="text-sm text-slate-500 mt-2">You don't have any submissions yet.</p>
+              <div className="mt-4"><button onClick={() => handleOpenForm('add')} className={btnPrimary}>Create your first logbook</button></div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <table className="w-full text-sm table-auto">
+                <thead>
+                  <tr className="text-left text-xs text-slate-500 uppercase bg-slate-50">
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3">Summary</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logbooks.map((item) => (
+                    <tr key={item.id} className="border-t border-slate-100">
+                      <td className="px-4 py-3 align-top w-40 text-slate-700">{item.date || '-'}</td>
+                      <td className="px-4 py-3 align-top w-48 text-slate-700">{item.taskCategory || '-'}</td>
+                      <td className="px-4 py-3 align-top text-slate-700">{item.summary || '-'}</td>
+                      <td className="px-4 py-3 align-top"><StatusBadge status={item.status} /></td>
+                      <td className="px-4 py-3 align-top w-44">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => handleOpenDetail(item)} className={iconActionView}><Eye className="w-4 h-4" /></button>
+                          <button onClick={() => handleOpenForm('edit', item)} className={iconActionEdit}><Edit className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteClick(item)} className={iconActionDelete}><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
