@@ -1,14 +1,27 @@
 import React, { useState } from 'react';
-import { BookOpen, LogOut, Menu, X, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
+import { BookOpen, LogOut, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function Navbar() {
-  const [open, setOpen] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const navigate = useNavigate();
+function roleLabel(role) {
+  const value = String(role || '').toLowerCase();
+  if (value === 'mentor') return 'Dosen Pembimbing';
+  if (value === 'admin') return 'Admin';
+  return 'Mahasiswa';
+}
 
+function getRoleHome(role) {
+  const value = String(role || '').toLowerCase();
+  if (value === 'mentor') return '/mentor/logbook';
+  if (value === 'admin') return '/admin/logbook';
+  return '/magang/logbook';
+}
+
+export default function RoleLayout({ role, children }) {
+  const navigate = useNavigate();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const activeRole = String(localStorage.getItem('role') || role || 'intern').toLowerCase();
 
   const handleConfirmLogout = () => {
     localStorage.removeItem('token');
@@ -19,7 +32,7 @@ export default function Navbar() {
     localStorage.removeItem('foto');
     localStorage.removeItem('permissions');
     localStorage.removeItem('must_change_password');
-    navigate('/login', { state: { loggedOut: true } });
+    navigate('/login', { replace: true });
   };
 
   const handleLogoutClick = () => {
@@ -27,48 +40,38 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="nav-shell">
-      <div className="nav-shellInner">
-        <div className="nav-brand">
-          <div className="nav-brandIcon">
-            <BookOpen className="h-5 w-5" />
+    <div className="min-h-screen bg-slate-100 text-slate-900 overflow-x-hidden">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-none items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#27345A] text-white shadow-lg shadow-slate-200">
+              <BookOpen className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-lg font-extrabold text-[#27345A]">InternHub</div>
+              <div className="text-xs text-slate-500">{roleLabel(activeRole)} Workspace</div>
+            </div>
           </div>
-          <div>
-            <div className="nav-brandTitle">InternHub</div>
-            <div className="nav-brandSub">Logbook and internship workspace</div>
-          </div>
-        </div>
 
-        <div className="nav-actions">
-          <span className="nav-user">{user.nama || 'User'}</span>
-          <button
-            onClick={handleLogoutClick}
-            className="nav-logout"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
-        </div>
-
-        <button onClick={() => setOpen(!open)} className="nav-menuButton">
-          {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
-      </div>
-
-      {open && (
-        <div className="nav-mobileMenu">
-          <div className="nav-mobileActions">
-            <span className="nav-mobileUser">{user.nama || 'User'}</span>
+          <div className="flex items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <div className="text-sm font-semibold text-slate-800">{user.nama || 'User'}</div>
+              <div className="text-xs text-slate-500">{roleLabel(activeRole)}</div>
+            </div>
             <button
               onClick={handleLogoutClick}
-              className="nav-logout"
+              className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-600"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="h-4 w-4" />
               Logout
             </button>
           </div>
         </div>
-      )}
+      </header>
+
+      <main className="mx-auto w-full max-w-none p-0 pt-20 sm:p-0 sm:pt-20">
+        {children || <Outlet />}
+      </main>
 
       {/* Logout Confirmation Modal */}
       <AnimatePresence>
@@ -112,6 +115,6 @@ export default function Navbar() {
           </div>
         )}
       </AnimatePresence>
-    </nav>
+    </div>
   );
 }

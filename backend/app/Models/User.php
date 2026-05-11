@@ -49,4 +49,29 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isMentor()
+    {
+        return $this->role === 'mentor';
+    }
+
+    public function isIntern()
+    {
+        return $this->role === 'intern';
+    }
+
+    public function mentors()
+    {
+        return $this->belongsToMany(User::class, 'intern_mentors', 'intern_id', 'mentor_id');
+    }
+
+    public function interns()
+    {
+        return $this->belongsToMany(User::class, 'intern_mentors', 'mentor_id', 'intern_id');
+    }
 }

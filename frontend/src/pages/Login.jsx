@@ -51,7 +51,13 @@ export default function Login() {
       localStorage.setItem('permissions', JSON.stringify(user.permissions));
     }
 
-    navigate('/logbook', { replace: true });
+    const nextPath = storedRole === 'mentor'
+      ? '/mentor/logbook'
+      : storedRole === 'admin'
+        ? '/admin/logbook'
+        : '/magang/logbook';
+
+    navigate(nextPath, { replace: true });
   };
 
   const handleLogin = async (e) => {

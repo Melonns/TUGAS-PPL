@@ -15,11 +15,9 @@ return new class extends Migration
         Schema::create('logbooks', function (Blueprint $table) {
             $table->id('id_logbooks');
             $table->unsignedBigInteger('user_id'); // Intern
-            $table->unsignedBigInteger('id_mahasiswa')->nullable(); // Profile reference
             $table->date('tanggal');
             $table->text('deskripsi_kegiatan'); // Rich text / textarea untuk deskripsi harian
             $table->json('bukti_kegiatan')->nullable(); // File evidence array
-            $table->unsignedBigInteger('tag_id')->nullable(); // Activity category
             $table->enum('status_verifikasi', ['draft', 'pending', 'verified', 'revision_needed'])->default('draft');
             $table->unsignedBigInteger('verified_by')->nullable(); // Mentor yang verifikasi
             $table->unsignedBigInteger('revision_by')->nullable(); // Who requested revision

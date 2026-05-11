@@ -7,7 +7,6 @@ use App\Models\Logbook;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use App\Notifications\GeneralNotification;
 
 class LogbookController extends Controller
 {
@@ -16,13 +15,7 @@ class LogbookController extends Controller
      */
     private function buildMentorInternDetailPath(User $user): string
     {
-        $internId = $user->mahasiswa?->id_mahasiswa;
-
-        if (!$internId) {
-            $internId = \App\Models\TblMahasiswa::where('user_id', $user->user_id)->value('id_mahasiswa');
-        }
-
-        return $internId ? "/mentor/interns/{$internId}" : '/mentor/internMonitoring';
+        return "/mentor/interns/{$user->user_id}";
     }
 
     /**
@@ -123,8 +116,8 @@ class LogbookController extends Controller
 
         foreach ($raw as $r) {
             $lower = strtolower(trim($r));
-            if ($lower === '') continue;
 
+                    // 'tag_id' => array_key_exists('tag_id', $input) ? ($input['tag_id'] ?: null) : $logbooks->tag_id,
             if (in_array($lower, ['approved', 'verified'])) {
                 $mapped[] = 'verified';
                 continue;
@@ -189,7 +182,7 @@ class LogbookController extends Controller
         if (!empty($uploadedFiles)) {
             $input['bukti_kegiatan'] = $uploadedFiles;
         } else {
-             unset($input['bukti_kegiatan']);
+            unset($input['bukti_kegiatan']);
         }
 
         $isDraft = $request->boolean('is_draft');
@@ -200,7 +193,6 @@ class LogbookController extends Controller
             'bukti_kegiatan' => 'nullable',
             'bukti_kegiatan.*' => 'file|mimes:jpg,jpeg,png,pdf|max:51200',
             'is_draft' => 'nullable|boolean',
-            'tag_id' => 'nullable|integer|exists:tags,id',
         ]);
 
         if ($validator->fails()) {
@@ -236,7 +228,6 @@ class LogbookController extends Controller
                     'status_verifikasi' => $isDraft ? 'draft' : 'pending',
                     'feedback' => null,
                     'submitted_at' => $isDraft ? null : Carbon::now(),
-                    'tag_id' => $request->filled('tag_id') ? $request->tag_id : $existing->tag_id,
                 ];
 
                 if (!empty($buktiPaths)) {
@@ -247,21 +238,6 @@ class LogbookController extends Controller
 
                 $message = $isDraft ? 'Logbook berhasil disimpan sebagai draft' : 'Logbook berhasil diajukan ulang';
 
-                if (!$isDraft) {
-                    $mentors = $user->mentors()->get();
-                    $targetPath = $this->buildMentorInternDetailPath($user);
-                    foreach ($mentors as $mentor) {
-                        if ($mentor) {
-                            $mentor->notify(new GeneralNotification(
-                                'Revisi Logbook Dikirim',
-                                "Intern {$user->nama} telah memperbaiki dan mengirim ulang logbook tanggal " . Carbon::parse($request->tanggal)->format('d-m-Y') . ".",
-                                $targetPath,
-                                "info",
-                                "mentor"
-                            ));
-                        }
-                    }
-                }
 
                 return response()->json([
                     'success' => true,
@@ -280,47 +256,31 @@ class LogbookController extends Controller
         $buktiPaths = [];
         if (!empty($uploadedFiles)) {
             foreach ($uploadedFiles as $file) {
-                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                 $path = $file->storeAs('logbooks', $filename, 'public');
-                 $buktiPaths[] = 'storage/' . $path;
+                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('logbooks', $filename, 'public');
+                $buktiPaths[] = 'storage/' . $path;
             }
         }
 
         $logbooks = Logbook::create([
             'user_id' => $user->user_id,
-            'id_mahasiswa' => $user->mahasiswa?->id_mahasiswa ?? null,
             'tanggal' => $request->tanggal,
             'deskripsi_kegiatan' => $request->deskripsi_kegiatan ?? '',
             'bukti_kegiatan' => $buktiPaths,
-            'tag_id' => $request->filled('tag_id') ? $request->tag_id : null,
             'status_verifikasi' => $isDraft ? 'draft' : 'pending',
             'submitted_at' => $isDraft ? null : Carbon::now(),
         ]);
 
         $message = $isDraft ? 'Logbook berhasil disimpan sebagai draft' : 'Logbook berhasil diajukan';
 
-        if (!$isDraft) {
-            $mentors = $user->mentors()->get();
-            $targetPath = $this->buildMentorInternDetailPath($user);
-            foreach ($mentors as $mentor) {
-                if ($mentor) {
-                    $mentor->notify(new GeneralNotification(
-                        'Logbook Baru',
-                        "Intern {$user->nama} telah mensubmit logbook untuk tanggal " . Carbon::parse($request->tanggal)->format('d-m-Y') . ".",
-                        $targetPath,
-                        "info",
-                        "mentor"
-                    ));
-                }
-            }
-        }
-
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $logbooks->load('tag')
+            'data' => $logbooks
         ], 201);
     }
+
+
 
     /**
      * Detail logbooks
@@ -364,7 +324,6 @@ class LogbookController extends Controller
             'bukti_kegiatan' => 'nullable',
             'bukti_kegiatan.*' => 'file|mimes:jpg,jpeg,png,pdf|max:51200',
             'is_draft' => 'nullable|boolean',
-            'tag_id' => 'nullable|integer|exists:tags,id',
         ]);
 
         if ($validator->fails()) {
@@ -395,7 +354,6 @@ class LogbookController extends Controller
         $dataToUpdate = [
             'deskripsi_kegiatan' => $input['deskripsi_kegiatan'] ?? $logbooks->deskripsi_kegiatan,
             'status_verifikasi' => $newStatus,
-            'tag_id' => array_key_exists('tag_id', $input) ? ($input['tag_id'] ?: null) : $logbooks->tag_id,
         ];
 
         if (!$isDraft) {
@@ -429,26 +387,10 @@ class LogbookController extends Controller
 
         $message = $isDraft ? 'Logbook berhasil disimpan sebagai draft' : 'Logbook berhasil diajukan untuk verifikasi';
 
-        if (!$isDraft && $newStatus === 'pending') {
-            $mentors = $user->mentors()->get();
-            $targetPath = $this->buildMentorInternDetailPath($user);
-            foreach ($mentors as $mentor) {
-                if ($mentor) {
-                    $mentor->notify(new GeneralNotification(
-                        'Logbook Diajukan',
-                        "Intern {$user->nama} telah mengajukan logbook tanggal " . Carbon::parse($logbooks->tanggal)->format('d-m-Y') . " untuk diverifikasi.",
-                        $targetPath,
-                        "info",
-                        "mentor"
-                    ));
-                }
-            }
-        }
-
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $logbooks->load('tag')
+            'data' => $logbooks->fresh(),
         ]);
     }
 
@@ -495,22 +437,9 @@ class LogbookController extends Controller
     public function listForMentor(Request $request)
     {
         $user = $request->user();
-        $direct = $user->interns()->pluck('users.user_id')->toArray();
-        $viaStudents = \DB::table('intern_mentors as im')
-            ->join('students as s', 's.id_mahasiswa', '=', 'im.intern_id')
-            ->where('im.is_active', 1)
-            ->where(function($q) use ($user) {
-                $q->where('im.mentor_user_id', $user->user_id);
-                if ($user->karyawan?->id_karyawan) {
-                    $q->orWhere('im.mentor_id', $user->karyawan->id_karyawan);
-                }
-            })
-            ->pluck('s.user_id')
-            ->filter()
-            ->toArray();
-        $internIds = array_unique(array_filter(array_merge($direct, $viaStudents)));
+        $internIds = $user->interns()->pluck('users.user_id')->toArray();
 
-        $query = Logbook::with(['user', 'tag'])
+        $query = Logbook::with(['user'])
             ->whereIn('user_id', $internIds)
             ->orderBy('tanggal', 'desc');
 
@@ -547,15 +476,8 @@ class LogbookController extends Controller
             });
         }
 
-        if ($request->has('user_id')) {
-            $mahasiswa = \App\Models\TblMahasiswa::where('user_id', $request->user_id)->first();
-            if ($mahasiswa) {
-                $query->where('id_mahasiswa', $mahasiswa->id_mahasiswa);
-            } elseif (\App\Models\TblMahasiswa::where('id_mahasiswa', $request->user_id)->exists()) {
-                $query->where('id_mahasiswa', $request->user_id);
-            } else {
-                $query->where('user_id', $request->user_id);
-            }
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
         }
 
             if ($request->filled('start_date') && $request->filled('end_date')) {
@@ -591,32 +513,14 @@ class LogbookController extends Controller
                 return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
             }
 
-            $direct = $user->interns()->pluck('users.user_id')->toArray();
-            $viaStudents = \DB::table('intern_mentors as im')
-                ->join('students as s', 's.id_mahasiswa', '=', 'im.intern_id')
-                ->where('im.is_active', 1)
-                ->where(function($q) use ($user) {
-                    $q->where('im.mentor_user_id', $user->user_id);
-                    if ($user->karyawan?->id_karyawan) {
-                        $q->orWhere('im.mentor_id', $user->karyawan->id_karyawan);
-                    }
-                })
-                ->pluck('s.user_id')
-                ->filter()
-                ->toArray();
-            $internIds = array_unique(array_filter(array_merge($direct, $viaStudents)));
+            $internIds = $user->interns()->pluck('users.user_id')->toArray();
             if (!in_array(intval($userId), $internIds)) {
                 return response()->json(['success' => false, 'message' => 'Anda tidak berhak melihat logbooks intern ini'], 403);
             }
         }
 
-        $mahasiswaId = $target->mahasiswa?->id_mahasiswa ?? null;
-        $query = Logbook::with(['user', 'tag']);
-        if ($mahasiswaId) {
-            $query->where('id_mahasiswa', $mahasiswaId);
-        } else {
-            $query->where('user_id', $userId);
-        }
+        $query = Logbook::with(['user']);
+        $query->where('user_id', $userId);
         $query->orderBy('tanggal', 'desc');
 
         if ($request->has('status_verifikasi')) {
@@ -670,17 +574,11 @@ class LogbookController extends Controller
             ], 404);
         }
 
-        $mahasiswa = $logbooks->mahasiswa;
-        $karyawanId = $user->karyawan?->id_karyawan;
-
-        $isBimbingan = false;
-        if ($karyawanId && $mahasiswa) {
-            $isBimbingan = \DB::table('intern_mentors')
-                ->where('mentor_id', $karyawanId)
-                ->where('intern_id', $mahasiswa->id_mahasiswa)
-                ->where('is_active', true)
-                ->exists();
-        }
+        $isBimbingan = \DB::table('intern_mentors')
+            ->where('mentor_id', $user->user_id)
+            ->where('intern_id', $logbooks->user_id)
+            ->where('is_active', true)
+            ->exists();
 
         $activeRole = $request->query('active_role');
         $isMentorContext = ($activeRole === 'mentor') || ($request->segment(2) === 'mentor' && $user->isMentor());
@@ -709,25 +607,6 @@ class LogbookController extends Controller
         $logbooks->update($updateData);
 
         $intern = User::find($logbooks->user_id);
-        if ($intern) {
-            if ($request->status_verifikasi === 'verified') {
-                $intern->notify(new GeneralNotification(
-                    'Logbook Diverifikasi',
-                    "Logbook Anda tanggal " . Carbon::parse($logbooks->tanggal)->format('d-m-Y') . " telah diverifikasi oleh Mentor.",
-                    "/intern/logbook",
-                    "success",
-                    "intern"
-                ));
-            } elseif ($request->status_verifikasi === 'revision_needed') {
-                $intern->notify(new GeneralNotification(
-                    'Revisi Logbook Diperlukan',
-                    "Mentor meminta revisi pada logbook Anda tanggal " . Carbon::parse($logbooks->tanggal)->format('d-m-Y') . ". Silakan cek catatan feedback.",
-                    "/intern/logbook",
-                    "warning",
-                    "intern"
-                ));
-            }
-        }
 
         $statusMessage = $request->status_verifikasi === 'verified' 
             ? 'Logbook berhasil diverifikasi' 
@@ -759,22 +638,9 @@ class LogbookController extends Controller
         $isMentorContext = ($activeRole === 'mentor') || ($request->segment(2) === 'mentor' && $user->isMentor());
 
         if ($user->isAdmin() && !$isMentorContext) {
-            $internIds = $request->filled('user_id') ? [$request->user_id] : \App\Models\User::whereHas('roles', fn($q) => $q->where('name', 'intern'))->pluck('user_id')->toArray();
+            $internIds = $request->filled('user_id') ? [$request->user_id] : \App\Models\User::where('role', 'intern')->pluck('user_id')->toArray();
         } else {
-            $direct = $user->interns()->pluck('users.user_id')->toArray();
-            $viaStudents = \DB::table('intern_mentors as im')
-                ->join('students as s', 's.id_mahasiswa', '=', 'im.intern_id')
-                ->where('im.is_active', 1)
-                ->where(function($q) use ($user) {
-                    $q->where('im.mentor_user_id', $user->user_id);
-                    if ($user->karyawan?->id_karyawan) {
-                        $q->orWhere('im.mentor_id', $user->karyawan->id_karyawan);
-                    }
-                })
-                ->pluck('s.user_id')
-                ->filter()
-                ->toArray();
-            $internIds = array_unique(array_filter(array_merge($direct, $viaStudents)));
+            $internIds = $user->interns()->pluck('users.user_id')->toArray();
             if ($request->filled('user_id')) {
                 $wanted = intval($request->user_id);
                 $internIds = in_array($wanted, $internIds) ? [$wanted] : [];
@@ -799,7 +665,6 @@ class LogbookController extends Controller
             ->keyBy('user_id');
 
         $users = \App\Models\User::whereIn('user_id', $internIds)
-            ->with('mahasiswa:user_id,mulai_magang,akhir_magang')
             ->get(['user_id', 'nama'])
             ->keyBy('user_id');
 
@@ -933,13 +798,16 @@ class LogbookController extends Controller
 
         $user = $request->user();
 
-        $isOwner = ($logbooks->user_id === $user->user_id) || (
-            $user->mahasiswa?->id_mahasiswa && $logbooks->id_mahasiswa && $user->mahasiswa->id_mahasiswa === $logbooks->id_mahasiswa
-        );
+        $isOwner = $logbooks->user_id === $user->user_id;
         $isAdmin = $user->isAdmin();
         $isMentor = false;
+        
         if ($user->isMentor()) {
-            $isMentor = $this->isMentorOfIntern($user, (int) $logbooks->user_id);
+            $isMentor = \DB::table('intern_mentors')
+                ->where('mentor_id', $user->user_id)
+                ->where('intern_id', $logbooks->user_id)
+                ->where('is_active', true)
+                ->exists();
         }
 
         if (!$isOwner && !$isAdmin && !$isMentor) {
@@ -979,33 +847,5 @@ class LogbookController extends Controller
         $file = \Illuminate\Support\Facades\Storage::disk('public')->get($relativePath);
         $mimeType = \Illuminate\Support\Facades\Storage::disk('public')->mimeType($relativePath);
         return response($file)->header('Content-Type', $mimeType);
-    }
-
-    private function isMentorOfIntern(User $mentor, int $internUserId): bool
-    {
-        if (! $mentor->isMentor()) {
-            return false;
-        }
-
-        $mentorKaryawanId = $mentor->karyawan?->id_karyawan;
-        $internMahasiswaId = \App\Models\TblMahasiswa::where('user_id', $internUserId)->value('id_mahasiswa');
-
-        $query = \DB::table('intern_mentors')->where('is_active', true);
-
-        $query->where(function ($q) use ($mentor, $mentorKaryawanId) {
-            $q->where('mentor_user_id', $mentor->user_id);
-            if ($mentorKaryawanId) {
-                $q->orWhere('mentor_id', $mentorKaryawanId);
-            }
-        });
-
-        $query->where(function ($q) use ($internUserId, $internMahasiswaId) {
-            $q->where('intern_user_id', $internUserId);
-            if ($internMahasiswaId) {
-                $q->orWhere('intern_id', $internMahasiswaId);
-            }
-        });
-
-        return $query->exists();
     }
 }

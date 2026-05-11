@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\TblMahasiswa;
+
 
 class Logbook extends Model
 {
@@ -15,11 +15,9 @@ class Logbook extends Model
 
     protected $fillable = [
         'user_id',
-        'id_mahasiswa',
         'tanggal',
         'deskripsi_kegiatan',
         'bukti_kegiatan',
-        'tag_id',
         'status_verifikasi',
         'verified_by',
         'feedback',
@@ -41,26 +39,9 @@ class Logbook extends Model
         return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
-    public function mahasiswa()
-    {
-        return $this->belongsTo(TblMahasiswa::class, 'id_mahasiswa', 'id_mahasiswa');
-    }
-
     public function scopeForUser($query, $user)
     {
-        $mahasiswaId = $user->mahasiswa?->id_mahasiswa ?? null;
-        if ($mahasiswaId) {
-            return $query->where(function($q) use ($mahasiswaId, $user) {
-                $q->where('id_mahasiswa', $mahasiswaId)
-                  ->orWhere('user_id', $user->user_id);
-            });
-        }
         return $query->where('user_id', $user->user_id);
-    }
-
-    public function tag()
-    {
-        return $this->belongsTo(Tag::class, 'tag_id');
     }
 
     public function verifier()

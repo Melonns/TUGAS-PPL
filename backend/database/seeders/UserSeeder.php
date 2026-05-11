@@ -49,5 +49,18 @@ class UserSeeder extends Seeder
         );
 
         $this->command->info('✓ User accounts created');
+
+        // Assign interns to mentor
+        $mentorUser = User::where('email', 'mentor@test.com')->first();
+        $internUsers = User::where('role', 'intern')->get();
+
+        foreach ($internUsers as $intern) {
+            \Illuminate\Support\Facades\DB::table('intern_mentors')->updateOrInsert(
+                ['intern_id' => $intern->user_id, 'mentor_id' => $mentorUser->user_id],
+                ['is_active' => true, 'created_at' => now(), 'updated_at' => now()]
+            );
+        }
+        
+        $this->command->info('✓ Mentors assigned to interns');
     }
 }
