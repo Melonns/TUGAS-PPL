@@ -632,11 +632,15 @@ const LogbookMonitoring = () => {
 };
 
 const ModalOverlay = ({ children, onClose, width = "max-w-md", zIndex = "z-50" }) => (
-  <div className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-black/40 backdrop-blur-sm p-4`}>
+  <div
+    className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-black/40 backdrop-blur-sm p-4`}
+    onClick={onClose}
+  >
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
+      onClick={(event) => event.stopPropagation()}
       className={`bg-white w-[95%] md:w-full ${width} rounded-2xl shadow-2xl p-6 relative`}
     >
       {children}

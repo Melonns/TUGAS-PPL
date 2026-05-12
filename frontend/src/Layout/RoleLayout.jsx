@@ -76,11 +76,15 @@ export default function RoleLayout({ role, children }) {
       {/* Logout Confirmation Modal */}
       <AnimatePresence>
         {showLogoutModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setShowLogoutModal(false)}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(event) => event.stopPropagation()}
               className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center relative"
             >
               <button 

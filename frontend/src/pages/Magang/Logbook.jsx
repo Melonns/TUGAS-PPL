@@ -761,7 +761,7 @@ const DailyActivitiesPage = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={() => handleOpenForm('add')} className={btnPrimary}><Plus className="w-4 h-4" /> Add Logbook</button>
+          <button type="button" onClick={() => handleOpenForm('add')} className={btnPrimary}><Plus className="w-4 h-4" /> Add Logbook</button>
         </div>
       </div>
 
@@ -988,8 +988,8 @@ const DailyActivitiesPage = () => {
 
       <AnimatePresence>
         {statusModal.open && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center relative">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setStatusModal(prev => ({ ...prev, open: false }))}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(event) => event.stopPropagation()} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center relative">
               <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${statusModal.type === "success" ? "bg-green-50" : "bg-red-50"}`}>
                 {statusModal.type === "success" ? <Check className="text-green-500" size={40} strokeWidth={3} /> : <AlertCircle className="text-red-500" size={40} strokeWidth={3} />}
               </div>
@@ -1280,8 +1280,8 @@ const LogbookFormModal = React.forwardRef(({ mode, initialData, taskCategories =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
-      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(event) => event.stopPropagation()} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center p-5 border-b border-slate-100">
           <h3 className="text-xl font-bold text-[#27345A]">{mode === "add" ? "Add Logbook Form" : "Edit Logbook Form"}</h3>
           <button onClick={onClose}><X className="text-slate-400 hover:text-slate-600" size={24} /></button>
@@ -1491,11 +1491,15 @@ const LogbookFormModal = React.forwardRef(({ mode, initialData, taskCategories =
 });
 
 const ModalOverlay = ({ children, onClose, width = "max-w-md", zIndex = "z-50", compact = false }) => (
-  <div className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-black/40 backdrop-blur-sm p-4`}>
+  <div
+    className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-black/40 backdrop-blur-sm p-4`}
+    onClick={onClose}
+  >
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
+      onClick={(event) => event.stopPropagation()}
       className={`bg-white w-[95%] md:w-full ${width} rounded-2xl shadow-2xl ${compact ? 'p-4' : 'p-6'} relative`}
     >
       {children}
