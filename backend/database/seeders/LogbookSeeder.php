@@ -39,7 +39,7 @@ class LogbookSeeder extends Seeder
         foreach ($interns as $intern) {
             for ($i = 0; $i < 10; $i++) {
                 $date = $startDate->copy()->addDays($i);
-                
+
                 // Skip weekends
                 if ($date->isWeekend()) {
                     $date = $date->nextWeekday();
@@ -47,17 +47,21 @@ class LogbookSeeder extends Seeder
 
                 $status = $i < 3 ? 'draft' : ($i < 6 ? 'pending' : 'verified');
 
-                Logbook::create([
-                    'user_id' => $intern->user_id,
-                    'tanggal' => $date,
-                    'deskripsi_kegiatan' => $aktivitas[array_rand($aktivitas)],
-                    'bukti_kegiatan' => json_encode([]),
-                    'status_verifikasi' => $status,
-                    'verified_by' => $status === 'verified' ? $mentor?->user_id : null,
-                    'verified_at' => $status === 'verified' ? now() : null,
-                    'submitted_at' => $status !== 'draft' ? now()->subHours(rand(1, 48)) : null,
-                    'feedback' => $status === 'verified' ? 'Bagus, sesuai dengan rencana kerja.' : null,
-                ]);
+                Logbook::updateOrCreate(
+                    [
+                        'user_id' => $intern->user_id,
+                        'tanggal' => $date->toDateString(),
+                    ],
+                    [
+                        'deskripsi_kegiatan' => $aktivitas[array_rand($aktivitas)],
+                        'bukti_kegiatan' => [],
+                        'status_verifikasi' => $status,
+                        'verified_by' => $status === 'verified' ? $mentor?->user_id : null,
+                        'verified_at' => $status === 'verified' ? now() : null,
+                        'submitted_at' => $status !== 'draft' ? now()->subHours(rand(1, 48)) : null,
+                        'feedback' => $status === 'verified' ? 'Bagus, sesuai dengan rencana kerja.' : null,
+                    ]
+                );
             }
         }
 
