@@ -19,8 +19,12 @@ class EloquentLogbookRepository implements LogbookRepositoryInterface
         return Logbook::create($attributes);
     }
 
-    public function update(Logbook $logbook, array $attributes): Logbook
+    public function update(int $id, array $attributes): Logbook
     {
+        $logbook = Logbook::find($id);
+        if (!$logbook) {
+            throw new \Exception("Logbook with id {$id} not found");
+        }
         $logbook->update($attributes);
 
         return $logbook->fresh();

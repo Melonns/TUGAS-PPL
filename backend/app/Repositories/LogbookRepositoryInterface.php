@@ -11,5 +11,5 @@ interface LogbookRepositoryInterface
 
     public function create(array $attributes): Logbook;
 
-    public function update(Logbook $logbook, array $attributes): Logbook;
+    public function update(int $id, array $attributes): Logbook;
 }

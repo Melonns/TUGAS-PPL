@@ -74,7 +74,7 @@ class LogbookStoreService
                 $updateData['bukti_kegiatan'] = $buktiPaths;
             }
 
-            $updated = $this->repository->update($existing, $updateData);
+            $updated = $this->repository->update($existing->id_logbooks, $updateData);
             $message = $isDraft ? 'Logbook berhasil disimpan sebagai draft' : 'Logbook berhasil diajukan ulang';
 
             return [

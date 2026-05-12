@@ -140,7 +140,7 @@ class LogbookStoreServiceTest extends TestCase
 
         $this->repository->shouldReceive('update')
             ->once()
-            ->with($existing, Mockery::on(function (array $data) {
+            ->with($existing->id_logbooks, Mockery::on(function (array $data) {
                 return $data['deskripsi_kegiatan'] === 'Teks baru saja'
                     && $data['status_verifikasi'] === 'draft'
                     && $data['submitted_at'] === null
@@ -179,9 +179,9 @@ class LogbookStoreServiceTest extends TestCase
 
         $this->repository->shouldReceive('update')
             ->once()
-            ->andReturnUsing(function (Logbook $logbook, array $data) {
-                $logbook->fill($data);
-                return $logbook;
+            ->andReturnUsing(function (int $id, array $data) use ($existing) {
+                $existing->fill($data);
+                return $existing;
             });
 
         $result = $this->service->store($user, [

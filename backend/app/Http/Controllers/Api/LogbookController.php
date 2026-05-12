@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Logbook;
 use App\Models\User;
 use App\Services\LogbookStoreService;
+use App\Services\LogbookUpdateService;
+use App\Services\LogbookVerifyService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -214,90 +216,15 @@ class LogbookController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $input = $request->all();
-        $uploadedFiles = $this->extractEvidenceFiles($request);
+        $result = app(LogbookUpdateService::class)->update(
+            $request->user(),
+            intval($id),
+            $request->all(),
+            $this->extractEvidenceFiles($request)
+        );
 
-        if (!empty($uploadedFiles)) {
-             $input['bukti_kegiatan'] = $uploadedFiles;
-        } else {
-            unset($input['bukti_kegiatan']);
-        }
-
-        $isDraft = $request->boolean('is_draft');
-
-        $validator = \Illuminate\Support\Facades\Validator::make($input, [
-            'deskripsi_kegiatan' => $isDraft ? 'nullable|string|max:5000' : 'required|string|max:5000',
-            'bukti_kegiatan' => 'nullable',
-            'bukti_kegiatan.*' => 'file|mimes:jpg,jpeg,png,pdf|max:51200',
-            'is_draft' => 'nullable|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $user = $request->user();
-        $logbooks = Logbook::where('id_logbooks', $id)
-            ->where('user_id', $user->user_id)
-            ->first();
-
-        if (!$logbooks) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Logbook tidak ditemukan'
-            ], 404);
-        }
-
-        if (!in_array($logbooks->status_verifikasi, ['draft', 'rejected', 'revision_needed'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Logbook dengan status ' . $logbooks->status_verifikasi . ' tidak dapat diubah'
-            ], 400);
-        }
-
-        $newStatus = $isDraft ? 'draft' : 'pending';
-
-        $dataToUpdate = [
-            'deskripsi_kegiatan' => $input['deskripsi_kegiatan'] ?? $logbooks->deskripsi_kegiatan,
-            'status_verifikasi' => $newStatus,
-        ];
-
-        if (!$isDraft) {
-            $dataToUpdate['feedback'] = null;
-            $dataToUpdate['submitted_at'] = Carbon::now();
-        }
-
-        if (!empty($uploadedFiles)) {
-            $oldFiles = $logbooks->bukti_kegiatan;
-            if ($oldFiles && is_array($oldFiles)) {
-                foreach ($oldFiles as $oldFile) {
-                    if (\Illuminate\Support\Facades\Storage::exists(str_replace('storage/', 'public/', $oldFile))) {
-                         \Illuminate\Support\Facades\Storage::delete(str_replace('storage/', 'public/', $oldFile));
-                    }
-                }
-            } elseif ($oldFiles && is_string($oldFiles)) {
-                 if (\Illuminate\Support\Facades\Storage::exists(str_replace('storage/', 'public/', $oldFiles))) {
-                         \Illuminate\Support\Facades\Storage::delete(str_replace('storage/', 'public/', $oldFiles));
-                    }
-            }
-            $newPaths = [];
-            foreach ($uploadedFiles as $file) {
-                 $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                 $path = $file->storeAs('logbooks', $filename, 'public');
-                 $newPaths[] = 'storage/' . $path;
-            }
-            $dataToUpdate['bukti_kegiatan'] = $newPaths;
-        }
-
-        $logbooks->update($dataToUpdate);
-
-        $message = $isDraft ? 'Logbook berhasil disimpan sebagai draft' : 'Logbook berhasil diajukan untuk verifikasi';
-
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-            'data' => $logbooks->fresh(),
-        ]);
+        return response()->json($result['body'], $result['status']);
+    }
     }
 
     /**
@@ -465,64 +392,19 @@ class LogbookController extends Controller
 
     public function verify(Request $request, $id)
     {
-        $request->validate([
+        $validated = $request->validate([
             'status_verifikasi' => 'required|in:verified,revision_needed',
             'feedback' => 'nullable|string|max:500'
         ]);
 
-        $user = $request->user();
-        $logbooks = Logbook::with('user')->find($id);
+        $result = app(LogbookVerifyService::class)->verify(
+            $request->user(),
+            intval($id),
+            $validated['status_verifikasi'],
+            $validated['feedback'] ?? null
+        );
 
-        if (!$logbooks) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Logbook tidak ditemukan'
-            ], 404);
-        }
-
-        $isBimbingan = \DB::table('intern_mentors')
-            ->where('mentor_id', $user->user_id)
-            ->where('intern_id', $logbooks->user_id)
-            ->where('is_active', true)
-            ->exists();
-
-        $activeRole = $request->query('active_role');
-        $isMentorContext = ($activeRole === 'mentor') || ($request->segment(2) === 'mentor' && $user->isMentor());
-
-        if (!$user->isAdmin() || $isMentorContext) {
-            if (!$isBimbingan) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Anda tidak berhak memverifikasi logbooks ini'
-                ], 403);
-            }
-        }
-
-        $updateData = [
-            'status_verifikasi' => $request->status_verifikasi,
-            'verified_by' => $user->user_id,
-            'feedback' => $request->feedback,
-            'verified_at' => Carbon::now(),
-        ];
-
-        if ($request->status_verifikasi === 'revision_needed') {
-            $updateData['revision_at'] = Carbon::now();
-            $updateData['revision_by'] = $user->user_id;
-        }
-
-        $logbooks->update($updateData);
-
-        $intern = User::find($logbooks->user_id);
-
-        $statusMessage = $request->status_verifikasi === 'verified' 
-            ? 'Logbook berhasil diverifikasi' 
-            : 'Logbook perlu revisi';
-
-        return response()->json([
-            'success' => true,
-            'message' => $statusMessage,
-            'data' => $logbooks->fresh(['user', 'verifier'])
-        ]);
+        return response()->json($result['body'], $result['status']);
     }
 
     public function progressForMentor(Request $request)
