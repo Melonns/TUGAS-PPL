@@ -1169,9 +1169,6 @@ const LogbookFormModal = React.forwardRef(({ mode, initialData, taskCategories =
     if (!formData.date) return setFileErrorModal({ open: true, message: "Please select a date." }), false;
     if (!isValidLogbookDate(formData.date)) return setFileErrorModal({ open: true, message: dateError || "Please select a valid date (weekdays only, not in the future)." }), false;
     if (!formData.description.trim()) return setFileErrorModal({ open: true, message: "Activity description is required." }), false;
-    if (files.length === 0) return setFileErrorModal({ open: true, message: "Please upload at least one photo (JPEG/PNG) as evidence." }), false;
-    const hasImage = files.some(f => (f.type && String(f.type).startsWith('image/')) || /\.(jpe?g|png)$/i.test(String(f.name)));
-    if (!hasImage) return setFileErrorModal({ open: true, message: "At least one photo (JPEG/PNG) is required as evidence." }), false;
     return true;
   };
 
@@ -1328,7 +1325,7 @@ const LogbookFormModal = React.forwardRef(({ mode, initialData, taskCategories =
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Output or Result <span className="text-red-500">*</span></label>
               <p className="text-xs text-slate-500 mb-3 bg-blue-50 border border-blue-100 rounded-lg p-2.5">
-                <span className="font-semibold text-blue-700">Required: upload at least one photo (selfie) taken during the work as evidence. Only JPEG/PNG accepted for evidence photos.</span>
+                <span className="font-semibold text-blue-700">Optional: you can attach photos or PDF files as evidence. JPEG, PNG, and PDF formats are accepted, up to 5MB.</span>
               </p>
               <div
                 onClick={() => fileInputRef.current.click()}
@@ -1397,7 +1394,7 @@ const LogbookFormModal = React.forwardRef(({ mode, initialData, taskCategories =
           <button
             type="button"
             onClick={() => handleAction("submit")}
-            disabled={!formData.date || !formData.description.trim() || files.some(f => f.status === "uploading") || !files.some(f => (f.type && String(f.type).startsWith('image/')) || /\.(jpe?g|png)$/i.test(String(f.name)))}
+            disabled={!formData.date || !formData.description.trim() || files.some(f => f.status === "uploading")}
             className={btnPrimaryClass}
           >
             {mode === 'add' || initialData?.rawStatus === 'draft' || String(initialData?.status).toLowerCase() === 'draft' ? 'Submit' : 'Re-Submit'}
