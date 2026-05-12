@@ -225,7 +225,6 @@ class LogbookController extends Controller
 
         return response()->json($result['body'], $result['status']);
     }
-    }
 
     /**
      * Delete logbooks (hanya jika status draft atau pending)
