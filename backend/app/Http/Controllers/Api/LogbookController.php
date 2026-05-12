@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Logbook;
 use App\Models\User;
+use App\Services\LogbookStoreService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -176,108 +177,13 @@ class LogbookController extends Controller
      */
     public function store(Request $request)
     {
-        $input = $request->all();
-        $uploadedFiles = $this->extractEvidenceFiles($request);
+        $result = app(LogbookStoreService::class)->store(
+            $request->user(),
+            $request->all(),
+            $this->extractEvidenceFiles($request)
+        );
 
-        if (!empty($uploadedFiles)) {
-            $input['bukti_kegiatan'] = $uploadedFiles;
-        } else {
-            unset($input['bukti_kegiatan']);
-        }
-
-        $isDraft = $request->boolean('is_draft');
-
-        $validator = \Illuminate\Support\Facades\Validator::make($input, [
-            'tanggal' => 'required|date|before_or_equal:today',
-            'deskripsi_kegiatan' => $isDraft ? 'nullable|string|max:5000' : 'required|string|max:5000',
-            'bukti_kegiatan' => 'nullable',
-            'bukti_kegiatan.*' => 'file|mimes:jpg,jpeg,png,pdf|max:51200',
-            'is_draft' => 'nullable|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $user = $request->user();
-
-        $existing = Logbook::forUser($user)
-            ->where('tanggal', $request->tanggal)
-            ->first();
-
-        if ($existing) {
-            if (in_array($existing->status_verifikasi, ['rejected', 'revision_needed', 'draft'])) {
-                $buktiPaths = [];
-                if (!empty($uploadedFiles)) {
-                    $oldFiles = $existing->bukti_kegiatan;
-                    if ($oldFiles && is_array($oldFiles)) {
-                        foreach ($oldFiles as $oldFile) {
-                            $path = str_replace('storage/', '', $oldFile);
-                            \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
-                        }
-                    }
-                    foreach ($uploadedFiles as $file) {
-                        $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                        $path = $file->storeAs('logbooks', $filename, 'public');
-                        $buktiPaths[] = 'storage/' . $path;
-                    }
-                }
-
-                $updateData = [
-                    'deskripsi_kegiatan' => $request->deskripsi_kegiatan ?? $existing->deskripsi_kegiatan,
-                    'status_verifikasi' => $isDraft ? 'draft' : 'pending',
-                    'feedback' => null,
-                    'submitted_at' => $isDraft ? null : Carbon::now(),
-                ];
-
-                if (!empty($buktiPaths)) {
-                    $updateData['bukti_kegiatan'] = $buktiPaths;
-                }
-
-                $existing->update($updateData);
-
-                $message = $isDraft ? 'Logbook berhasil disimpan sebagai draft' : 'Logbook berhasil diajukan ulang';
-
-
-                return response()->json([
-                    'success' => true,
-                    'message' => $message,
-                    'data' => $existing->fresh()
-                ], 200);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Logbook untuk tanggal ini sudah ada. Silakan edit logbooks yang sudah ada.',
-                'existing_logbooks' => $existing
-            ], 400);
-        }
-
-        $buktiPaths = [];
-        if (!empty($uploadedFiles)) {
-            foreach ($uploadedFiles as $file) {
-                $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('logbooks', $filename, 'public');
-                $buktiPaths[] = 'storage/' . $path;
-            }
-        }
-
-        $logbooks = Logbook::create([
-            'user_id' => $user->user_id,
-            'tanggal' => $request->tanggal,
-            'deskripsi_kegiatan' => $request->deskripsi_kegiatan ?? '',
-            'bukti_kegiatan' => $buktiPaths,
-            'status_verifikasi' => $isDraft ? 'draft' : 'pending',
-            'submitted_at' => $isDraft ? null : Carbon::now(),
-        ]);
-
-        $message = $isDraft ? 'Logbook berhasil disimpan sebagai draft' : 'Logbook berhasil diajukan';
-
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-            'data' => $logbooks
-        ], 201);
+        return response()->json($result['body'], $result['status']);
     }
 
 
