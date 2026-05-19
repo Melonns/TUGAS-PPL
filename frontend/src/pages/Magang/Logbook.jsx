@@ -36,6 +36,7 @@ const iconActionFeedback = `${iconActionBase} bg-amber-500 hover:bg-amber-600 sh
 const iconActionDelete = `${iconActionBase} bg-red-500 hover:bg-red-600 shadow-red-100`;
 const iconActionAddOutline = "inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors active:scale-95";
 const DEBUG_INSERT_DUMMY_NOT_YET = false;
+const recentFetchSignatures = new Map();
 
 const DailyActivitiesPage = () => {
   const [logbooks, setLogbooks] = useState([]);
@@ -46,7 +47,7 @@ const DailyActivitiesPage = () => {
   const [uploadProgress, setUploadProgress] = useState({ open: false, percent: 0, indeterminate: true });
   const formRef = useRef(null);
   const uploadMetaRef = useRef(null);
-  const isInitialMountRef = useRef(true);
+  const lastAutoFetchKeyRef = useRef("");
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -61,9 +62,10 @@ const DailyActivitiesPage = () => {
   const [serverMeta, setServerMeta] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const initialFilter = { status: [], startDate: "", endDate: "" };
   const [filter, setFilter] = useState({ status: [], startDate: "", endDate: "" });
   const [appliedFilter, setAppliedFilter] = useState({ status: [], startDate: "", endDate: "" });
-  const isFilterActive = Boolean(filter.status.length > 0 || filter.startDate || filter.endDate);
+  const isFilterActive = Boolean(appliedFilter.status.length > 0 || appliedFilter.startDate || appliedFilter.endDate);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -386,12 +388,29 @@ const DailyActivitiesPage = () => {
   };
 
   const resetFilter = async () => {
-    const cleared = { status: [], startDate: "", endDate: "" };
+    const cleared = initialFilter;
     setFilter(cleared);
     setAppliedFilter(cleared);
     setCurrentPage(1);
     setIsFilterOpen(false);
-    await fetchLogbooks({ page: 1, per_page: itemsPerPage, daily: 1, user_id: getStoredMahasiswaId(), ...buildFilterParams(cleared) });
+  };
+
+  const applyFilter = async () => {
+    setAppliedFilter(filter);
+    setIsFilterOpen(false);
+    setCurrentPage(1);
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilter((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleStatusToggle = (status) => {
+    setFilter((prev) => {
+      const current = prev.status;
+      const updated = current.includes(status) ? current.filter((item) => item !== status) : [...current, status];
+      return { ...prev, status: updated };
+    });
   };
 
   const handleViewFile = async (logbookId, fileUrl, displayName) => {
@@ -588,6 +607,28 @@ const DailyActivitiesPage = () => {
       }
 
       const { daily, ...filteredParams } = params;
+      const fetchSignature = JSON.stringify({
+        page: params.page ?? currentPage,
+        per_page: params.per_page ?? itemsPerPage,
+        userId: mahasiswaId,
+        start_date: params.start_date ?? formatDateForApi(appliedFilter.startDate) ?? undefined,
+        end_date: params.end_date ?? formatDateForApi(appliedFilter.endDate) ?? undefined,
+        q: params.q ?? (searchTerm.trim() || undefined),
+        ...filteredParams,
+      });
+
+      const now = Date.now();
+      const lastSeenAt = recentFetchSignatures.get(fetchSignature) ?? 0;
+      if (now - lastSeenAt < 800) {
+        return [];
+      }
+      recentFetchSignatures.set(fetchSignature, now);
+      setTimeout(() => {
+        if (recentFetchSignatures.get(fetchSignature) === now) {
+          recentFetchSignatures.delete(fetchSignature);
+        }
+      }, 1200);
+
       const commonParams = {
         page: params.page ?? currentPage,
         per_page: params.per_page ?? itemsPerPage,
@@ -665,17 +706,20 @@ const DailyActivitiesPage = () => {
   };
 
   useEffect(() => {
-    if (!isInitialMountRef.current) return;
-    isInitialMountRef.current = false;
+    const fetchKey = JSON.stringify({
+      page: 1,
+      per_page: itemsPerPage,
+      search: searchTerm.trim(),
+      filter: buildFilterParams(appliedFilter),
+      userId: getStoredMahasiswaId(),
+    });
 
-    fetchLogbooks({ page: 1, per_page: itemsPerPage, user_id: getStoredMahasiswaId(), ...buildFilterParams(appliedFilter) });
-  }, []);
-
-  useEffect(() => {
-    if (isInitialMountRef.current) return;
+    if (lastAutoFetchKeyRef.current === fetchKey) {
+      return;
+    }
 
     const timeoutId = setTimeout(() => {
-      setCurrentPage(1);
+      lastAutoFetchKeyRef.current = fetchKey;
       fetchLogbooks({ page: 1, per_page: itemsPerPage, user_id: getStoredMahasiswaId(), ...buildFilterParams(appliedFilter) });
     }, searchTerm.trim() ? 400 : 0);
 
@@ -757,7 +801,18 @@ const DailyActivitiesPage = () => {
             />
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
-          <button onClick={() => setIsFilterOpen(true)} className={btnSecondary}><Filter className="w-4 h-4" /> Filter</button>
+          <button
+            type="button"
+            onClick={() => {
+              setFilter(appliedFilter);
+              setIsFilterOpen(true);
+            }}
+            className={btnPrimary}
+            aria-label="Open filter"
+          >
+            <Filter className="w-4 h-4" /> Filter
+            {isFilterActive && <span className="ml-1 inline-block w-2 h-2 rounded-full bg-white/90" />}
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -854,6 +909,74 @@ const DailyActivitiesPage = () => {
       )}
 
       <AnimatePresence>
+        {isFilterOpen && (
+          <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setIsFilterOpen(false)}>
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              onClick={(event) => event.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-[#27345A]">Filter Logbook</h3>
+                <button type="button" onClick={() => setIsFilterOpen(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={22} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-3">Status</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['draft', 'pending', 'revision_needed', 'verified', 'rejected'].map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => handleStatusToggle(status)}
+                        className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${filter.status.includes(status) ? 'bg-[#354C8F] text-white border-[#354C8F] shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        {status.replaceAll('_', ' ')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-3">Period</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3 text-slate-400 pointer-events-none" size={16} />
+                      <input
+                        type="date"
+                        value={filter.startDate}
+                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                        onClick={(e) => e.target.showPicker?.()}
+                        className="w-full pl-10 pr-3 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#354C8F]/20 cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3 text-slate-400 pointer-events-none" size={16} />
+                      <input
+                        type="date"
+                        value={filter.endDate}
+                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                        onClick={(e) => e.target.showPicker?.()}
+                        className="w-full pl-10 pr-3 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#354C8F]/20 cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-end mt-8 pt-6 border-t border-slate-100">
+                <button type="button" onClick={resetFilter} className={btnSecondary}>Reset</button>
+                <button type="button" onClick={applyFilter} className={btnPrimary}>Apply</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {isFormOpen && (
           <LogbookFormModal
             ref={formRef}

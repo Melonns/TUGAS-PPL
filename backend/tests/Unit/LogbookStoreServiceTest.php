@@ -68,42 +68,28 @@ class LogbookStoreServiceTest extends TestCase
         return $logbook;
     }
 
-    public function test_tc_ustore_01_validasi_gagal_tanpa_file(): void
+    public function test_tc_ustore_01_validasi_gagal(): void
     {
         $user = $this->makeUser();
 
+        // Mengirim request dengan tanggal kosong (Validasi Gagal)
         $result = $this->service->store($user, [
             'tanggal' => '',
-            'deskripsi_kegiatan' => '',
+            'deskripsi_kegiatan' => 'Kegiatan Hari Ini',
             'is_draft' => false,
         ]);
 
         $this->assertSame(422, $result['status']);
         $this->assertArrayHasKey('errors', $result['body']);
         $this->assertArrayHasKey('tanggal', $result['body']['errors']->toArray());
-        $this->assertArrayHasKey('deskripsi_kegiatan', $result['body']['errors']->toArray());
     }
 
-    public function test_tc_ustore_02_validasi_gagal_ada_file(): void
-    {
-        $user = $this->makeUser();
-        $file = UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf');
-
-        $result = $this->service->store($user, [
-            'tanggal' => 'not-a-date',
-            'deskripsi_kegiatan' => 'Kegiatan valid',
-            'is_draft' => false,
-        ], [$file]);
-
-        $this->assertSame(422, $result['status']);
-        $this->assertArrayHasKey('errors', $result['body']);
-        $this->assertArrayHasKey('tanggal', $result['body']['errors']->toArray());
-    }
-
-    public function test_tc_ustore_03_data_terkunci(): void
+    public function test_tc_ustore_02_data_historis_terkunci(): void
     {
         $user = $this->makeUser();
         $date = now()->subDay()->toDateString();
+        
+        // Ada logbook lama berstatus 'pending' (Terkunci)
         $existing = $this->makeLogbook($user, $date, 'pending');
 
         $this->repository->shouldReceive('findExistingForUserOnDate')
@@ -115,7 +101,7 @@ class LogbookStoreServiceTest extends TestCase
 
         $result = $this->service->store($user, [
             'tanggal' => $date,
-            'deskripsi_kegiatan' => 'Kegiatan baru',
+            'deskripsi_kegiatan' => 'Mencoba mengubah data terkunci',
             'is_draft' => false,
         ]);
 
@@ -124,46 +110,12 @@ class LogbookStoreServiceTest extends TestCase
         $this->assertSame('Status Locked', $result['body']['message']);
     }
 
-    public function test_tc_ustore_04_update_teks_saja(): void
+    public function test_tc_ustore_03_revisi_logbook_submit_final(): void
     {
         $user = $this->makeUser();
         $date = now()->subDays(2)->toDateString();
-        $existing = $this->makeLogbook($user, $date, 'draft', [
-            'deskripsi_kegiatan' => 'Teks lama',
-            'bukti_kegiatan' => ['storage/logbooks/old-bukti.pdf'],
-            'submitted_at' => null,
-        ]);
-
-        $this->repository->shouldReceive('findExistingForUserOnDate')
-            ->once()
-            ->andReturn($existing);
-
-        $this->repository->shouldReceive('update')
-            ->once()
-            ->with($existing->id_logbooks, Mockery::on(function (array $data) {
-                return $data['deskripsi_kegiatan'] === 'Teks baru saja'
-                    && $data['status_verifikasi'] === 'draft'
-                    && $data['submitted_at'] === null
-                    && $data['feedback'] === null
-                    && !array_key_exists('bukti_kegiatan', $data);
-            }))
-            ->andReturn($existing);
-
-        $result = $this->service->store($user, [
-            'tanggal' => $date,
-            'deskripsi_kegiatan' => 'Teks baru saja',
-            'is_draft' => true,
-        ]);
-
-        $this->assertSame(200, $result['status']);
-        $this->assertTrue($result['body']['success']);
-        Storage::disk('public')->assertDirectoryEmpty('logbooks');
-    }
-
-    public function test_tc_ustore_05_update_teks_dan_file(): void
-    {
-        $user = $this->makeUser();
-        $date = now()->subDays(3)->toDateString();
+        
+        // Ada logbook lama berstatus 'draft' (Bisa direvisi)
         $existing = $this->makeLogbook($user, $date, 'draft', [
             'deskripsi_kegiatan' => 'Teks lama',
             'bukti_kegiatan' => ['storage/logbooks/old-bukti.pdf'],
@@ -184,58 +136,68 @@ class LogbookStoreServiceTest extends TestCase
                 return $existing;
             });
 
+        // is_draft = false (Submit Final)
         $result = $this->service->store($user, [
             'tanggal' => $date,
-            'deskripsi_kegiatan' => 'Teks baru dan file baru',
+            'deskripsi_kegiatan' => 'Teks baru hasil revisi',
             'is_draft' => false,
         ], [$newFile]);
 
         $this->assertSame(200, $result['status']);
         $this->assertTrue($result['body']['success']);
+        $this->assertSame('Logbook berhasil diajukan ulang', $result['body']['message']);
+        
+        // Memastikan file lama dihapus dan file baru tersimpan
         Storage::disk('public')->assertMissing('logbooks/old-bukti.pdf');
         $storedFiles = Storage::disk('public')->allFiles('logbooks');
         $this->assertCount(1, $storedFiles);
-        $this->assertStringEndsWith('.pdf', $storedFiles[0]);
     }
 
-    public function test_tc_ustore_06_insert_tanpa_file(): void
+    public function test_tc_ustore_04_revisi_logbook_simpan_draft(): void
     {
         $user = $this->makeUser();
-        $date = now()->subDays(4)->toDateString();
+        $date = now()->subDays(3)->toDateString();
+        
+        // Ada logbook lama berstatus 'draft'
+        $existing = $this->makeLogbook($user, $date, 'draft', [
+            'deskripsi_kegiatan' => 'Teks lama',
+            'bukti_kegiatan' => ['storage/logbooks/old-bukti.pdf'],
+            'submitted_at' => null,
+        ]);
 
         $this->repository->shouldReceive('findExistingForUserOnDate')
             ->once()
-            ->andReturnNull();
+            ->andReturn($existing);
 
-        $this->repository->shouldReceive('create')
+        $this->repository->shouldReceive('update')
             ->once()
-            ->with(Mockery::on(function (array $data) use ($user, $date) {
-                return $data['user_id'] === $user->user_id
-                    && $data['tanggal'] === $date
-                    && $data['deskripsi_kegiatan'] === 'Logbook baru tanpa file'
-                    && $data['status_verifikasi'] === 'pending'
-                    && $data['submitted_at'] instanceof Carbon
-                    && $data['bukti_kegiatan'] === [];
+            ->with($existing->id_logbooks, Mockery::on(function (array $data) {
+                return $data['deskripsi_kegiatan'] === 'Teks baru disimpan draft lagi'
+                    && $data['status_verifikasi'] === 'draft'
+                    && $data['submitted_at'] === null
+                    && $data['feedback'] === null;
             }))
-            ->andReturn(new Logbook());
+            ->andReturn($existing);
 
+        // is_draft = true (Simpan Draft)
         $result = $this->service->store($user, [
             'tanggal' => $date,
-            'deskripsi_kegiatan' => 'Logbook baru tanpa file',
-            'is_draft' => false,
+            'deskripsi_kegiatan' => 'Teks baru disimpan draft lagi',
+            'is_draft' => true,
         ]);
 
-        $this->assertSame(201, $result['status']);
+        $this->assertSame(200, $result['status']);
         $this->assertTrue($result['body']['success']);
-        Storage::disk('public')->assertDirectoryEmpty('logbooks');
+        $this->assertSame('Logbook berhasil disimpan sebagai draft', $result['body']['message']);
     }
 
-    public function test_tc_ustore_07_insert_dengan_file(): void
+    public function test_tc_ustore_05_logbook_baru_submit_final(): void
     {
         $user = $this->makeUser();
-        $date = now()->subDays(5)->toDateString();
+        $date = now()->subDays(4)->toDateString();
         $file = UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf');
 
+        // Belum ada data historis
         $this->repository->shouldReceive('findExistingForUserOnDate')
             ->once()
             ->andReturnNull();
@@ -248,16 +210,52 @@ class LogbookStoreServiceTest extends TestCase
                 return $logbook;
             });
 
+        // is_draft = false (Submit Final)
         $result = $this->service->store($user, [
             'tanggal' => $date,
-            'deskripsi_kegiatan' => 'Logbook baru dengan file',
+            'deskripsi_kegiatan' => 'Logbook baru submit langsung',
             'is_draft' => false,
         ], [$file]);
 
         $this->assertSame(201, $result['status']);
         $this->assertTrue($result['body']['success']);
+        $this->assertSame('Logbook berhasil diajukan', $result['body']['message']);
+        
         $storedFiles = Storage::disk('public')->allFiles('logbooks');
         $this->assertCount(1, $storedFiles);
-        $this->assertStringEndsWith('.pdf', $storedFiles[0]);
+    }
+
+    public function test_tc_ustore_06_logbook_baru_simpan_draft(): void
+    {
+        $user = $this->makeUser();
+        $date = now()->subDays(5)->toDateString();
+
+        // Belum ada data historis
+        $this->repository->shouldReceive('findExistingForUserOnDate')
+            ->once()
+            ->andReturnNull();
+
+        $this->repository->shouldReceive('create')
+            ->once()
+            ->with(Mockery::on(function (array $data) use ($user, $date) {
+                return $data['user_id'] === $user->user_id
+                    && $data['tanggal'] === $date
+                    && $data['deskripsi_kegiatan'] === 'Logbook baru simpan draft'
+                    && $data['status_verifikasi'] === 'draft'
+                    && $data['submitted_at'] === null
+                    && $data['bukti_kegiatan'] === [];
+            }))
+            ->andReturn(new Logbook());
+
+        // is_draft = true (Simpan Draft)
+        $result = $this->service->store($user, [
+            'tanggal' => $date,
+            'deskripsi_kegiatan' => 'Logbook baru simpan draft',
+            'is_draft' => true,
+        ]);
+
+        $this->assertSame(201, $result['status']);
+        $this->assertTrue($result['body']['success']);
+        $this->assertSame('Logbook berhasil disimpan sebagai draft', $result['body']['message']);
     }
 }

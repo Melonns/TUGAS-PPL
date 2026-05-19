@@ -112,15 +112,11 @@ export default function Login() {
         <img src={bgGedung} alt="InternHub background" className="auth-heroImage" />
         <div className="auth-heroOverlay" />
         <div className="auth-heroContent">
-          <div className="auth-badge">
-            <BookOpen className="h-4 w-4" />
-            PT SIER
-          </div>
           <h2 className="auth-heroTitle">
-            PT Surabaya Industrial Estate Rungkut (SIER)
+            Logbook Management System
           </h2>
           <p className="auth-heroText">
-            Integrated Internship Attendance & Reporting System.
+            Integrated Logbook System.
           </p>
         </div>
       </div>
@@ -129,8 +125,8 @@ export default function Login() {
         <div className="auth-card">
           <div className="auth-cardTop">
             <img src={logoSier} alt="InternHub Logo" className="auth-logo" />
-            <h1 className="auth-title">SIER Internship Program</h1>
-            <p className="auth-subtitle">Sign in to access your dashboard.</p>
+            <h1 className="auth-title">Logbook Management System</h1>
+            <p className="auth-subtitle">Sign in to access.</p>
           </div>
 
           {error && (

@@ -66,11 +66,13 @@ class User extends Authenticatable
 
     public function mentors()
     {
-        return $this->belongsToMany(User::class, 'intern_mentors', 'intern_id', 'mentor_id');
+        return $this->belongsToMany(User::class, 'intern_mentors', 'intern_id', 'mentor_id')
+            ->wherePivot('is_active', true);
     }
 
     public function interns()
     {
-        return $this->belongsToMany(User::class, 'intern_mentors', 'mentor_id', 'intern_id');
+        return $this->belongsToMany(User::class, 'intern_mentors', 'mentor_id', 'intern_id')
+            ->wherePivot('is_active', true);
     }
 }
