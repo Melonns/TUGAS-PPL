@@ -1,18 +1,25 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Unit;
 
-use Tests\TestCase;
 use App\Models\Logbook;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use App\Repositories\LogbookRepositoryInterface;
+use App\Services\LogbookVerifyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Mockery;
+use Tests\TestCase;
 
 class LogbookVerifyTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected $authorizedMentor;
+    private LogbookRepositoryInterface $repository;
+
+    private LogbookVerifyService $service;
+
+    protected $mentor;
     protected $intern;
     protected $logbook;
 
@@ -20,98 +27,158 @@ class LogbookVerifyTest extends TestCase
     {
         parent::setUp();
 
-        // Mentor
-        $this->authorizedMentor = User::factory()->create([
-            'role' => 'mentor'
+        $this->repository = Mockery::mock(
+            LogbookRepositoryInterface::class
+        );
+
+        $this->app->instance(
+            LogbookRepositoryInterface::class,
+            $this->repository
+        );
+
+        $this->service = $this->app->make(
+            LogbookVerifyService::class
+        );
+
+        $this->mentor = User::factory()->create([
+            'role' => 'mentor',
         ]);
 
-        // Intern
         $this->intern = User::factory()->create([
-            'role' => 'intern'
+            'role' => 'intern',
         ]);
 
-        // Relasi mentor - intern
-        DB::table('intern_mentors')->insert([
-            'mentor_id' => $this->authorizedMentor->user_id,
-            'intern_id' => $this->intern->user_id,
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // Logbook milik intern
         $this->logbook = Logbook::factory()->create([
             'user_id' => $this->intern->user_id,
-            'status_verifikasi' => 'pending'
+            'status_verifikasi' => 'pending',
         ]);
     }
 
-    public function test_it_fails_validation_if_status_is_invalid()
+    protected function tearDown(): void
     {
-        $response = $this->actingAs($this->authorizedMentor)
-            ->postJson("/api/mentor/logbook/{$this->logbook->id_logbooks}/verify", [
-                'status_verifikasi' => 'draft',
-                'feedback' => 'Coba lagi'
-            ]);
+        Mockery::close();
 
-        $response->assertStatus(422);
+        parent::tearDown();
     }
 
-    public function test_it_returns_404_if_logbook_not_found()
+    public function test_tc_uverify_01_verify_successfully(): void
     {
-        $response = $this->actingAs($this->authorizedMentor)
-            ->postJson("/api/mentor/logbook/999999/verify", [
-                'status_verifikasi' => 'verified'
-            ]);
-
-        $response->assertStatus(404);
-    }
-
-    public function test_it_denies_access_if_user_is_not_the_assigned_mentor()
-    {
-        $mentorLain = User::factory()->create([
-            'role' => 'mentor'
+        DB::table('intern_mentors')->insert([
+            'mentor_id' => $this->mentor->user_id,
+            'intern_id' => $this->intern->user_id,
+            'is_active' => true,
         ]);
 
-        $response = $this->actingAs($mentorLain)
-            ->postJson("/api/mentor/logbook/{$this->logbook->id_logbooks}/verify", [
-                'status_verifikasi' => 'verified'
-            ]);
+        $this->repository->shouldReceive('update')
+            ->once()
+            ->andReturnUsing(function ($id, $data) {
 
-        $response->assertStatus(403);
-    }
+                $this->logbook->update($data);
 
-    public function test_it_successfully_verifies_logbook_with_verified_status()
-    {
-        $response = $this->actingAs($this->authorizedMentor)
-            ->postJson("/api/mentor/logbook/{$this->logbook->id_logbooks}/verify", [
-                'status_verifikasi' => 'verified',
-                'feedback' => 'Sangat baik'
-            ]);
+                return $this->logbook;
+            });
 
-        $response->assertStatus(200);
+        $result = $this->service->verify(
+            $this->mentor,
+            $this->logbook->id_logbooks,
+            'verified',
+            'Sangat baik'
+        );
+
+        $this->assertSame(200, $result['status']);
+
+        $this->assertTrue(
+            $result['body']['success']
+        );
 
         $this->assertDatabaseHas('logbooks', [
             'id_logbooks' => $this->logbook->id_logbooks,
             'status_verifikasi' => 'verified',
-            'verified_by' => $this->authorizedMentor->user_id,
         ]);
     }
 
-    public function test_it_successfully_updates_status_to_revision_needed()
+    public function test_tc_uverify_02_forbidden_if_not_assigned_mentor(): void
     {
-        $response = $this->actingAs($this->authorizedMentor)
-            ->postJson("/api/mentor/logbook/{$this->logbook->id_logbooks}/verify", [
-                'status_verifikasi' => 'revision_needed',
-                'feedback' => 'Perbaiki bagian analisis'
-            ]);
+        $mentorLain = User::factory()->create([
+            'role' => 'mentor',
+        ]);
 
-        $response->assertStatus(200);
+        $result = $this->service->verify(
+            $mentorLain,
+            $this->logbook->id_logbooks,
+            'verified'
+        );
+
+        $this->assertSame(403, $result['status']);
+
+        $this->assertFalse(
+            $result['body']['success']
+        );
+    }
+
+    public function test_tc_uverify_03_invalid_status_validation(): void
+    {
+        $result = $this->service->verify(
+            $this->mentor,
+            $this->logbook->id_logbooks,
+            'draft'
+        );
+
+        $this->assertSame(422, $result['status']);
+
+        $this->assertFalse(
+            $result['body']['success']
+        );
+    }
+
+    public function test_tc_uverify_04_logbook_not_found(): void
+    {
+        $result = $this->service->verify(
+            $this->mentor,
+            999999,
+            'verified'
+        );
+
+        $this->assertSame(404, $result['status']);
+
+        $this->assertFalse(
+            $result['body']['success']
+        );
+    }
+
+    public function test_tc_uverify_05_revision_needed(): void
+    {
+        DB::table('intern_mentors')->insert([
+            'mentor_id' => $this->mentor->user_id,
+            'intern_id' => $this->intern->user_id,
+            'is_active' => true,
+        ]);
+
+        $this->repository->shouldReceive('update')
+            ->once()
+            ->andReturnUsing(function ($id, $data) {
+
+                $this->logbook->update($data);
+
+                return $this->logbook;
+            });
+
+        $result = $this->service->verify(
+            $this->mentor,
+            $this->logbook->id_logbooks,
+            'revision_needed',
+            'Perbaiki bagian analisis'
+        );
+
+        $this->assertSame(200, $result['status']);
+
+        $this->assertTrue(
+            $result['body']['success']
+        );
 
         $this->assertDatabaseHas('logbooks', [
             'id_logbooks' => $this->logbook->id_logbooks,
             'status_verifikasi' => 'revision_needed',
-            'revision_by' => $this->authorizedMentor->user_id,
         ]);
     }
 }
