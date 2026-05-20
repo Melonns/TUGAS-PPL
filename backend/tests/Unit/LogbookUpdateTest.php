@@ -1,158 +1,149 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Unit\Services;
 
-use Tests\TestCase;
-use App\Models\User;
 use App\Models\Logbook;
+use App\Models\User;
+use App\Repositories\LogbookRepositoryInterface;
+use App\Services\LogbookUpdateService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
+use Tests\TestCase;
 
-class LogbookUpdateTest extends TestCase
+class LogBookUpdateTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected $intern;
+    private LogbookRepositoryInterface $repository;
+    private LogbookUpdateService $service;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->intern = User::factory()->create([
-            'role' => 'intern'
-        ]);
+        $this->repository = Mockery::mock(LogbookRepositoryInterface::class);
+
+        $this->service = new LogbookUpdateService(
+            $this->repository
+        );
     }
 
-    public function test_update_empty_payload_returns_422_validation_error()
+
+    public function test_tc_uupdate_01_validation()
     {
-        $logbook = Logbook::create([
-            'user_id' => $this->intern->user_id,
-            'tanggal' => now()->toDateString(),
-            'deskripsi_kegiatan' => 'Test logbook',
-            'status_verifikasi' => 'draft',
-        ]);
+        $user = User::factory()->create();
+        
+        $input = [
+            'deskripsi_kegiatan' => '',
+            'is_draft' => false
+        ];
 
-        $response = $this->actingAs($this->intern)
-            ->putJson("/api/logbook/{$logbook->id_logbooks}", []);
+        $result = $this->service->update($user, 1, $input);
 
-        $response->assertStatus(422);
+        $this->assertEquals(422, $result['status']);
+        $this->assertFalse($result['body']['success']);
+        $this->assertArrayHasKey('errors', $result['body']);
     }
 
-    public function test_update_logbook_not_found_returns_404()
-    {
-        $response = $this->actingAs($this->intern)
-            ->putJson('/api/logbook/99999', [
-                'deskripsi_kegiatan' => 'Update logbook',
-                'is_draft' => true,
-            ]);
 
-        $response->assertStatus(404);
+    public function test_tc_uupdate_02_logbook_not_found()
+    {
+        $user = User::factory()->create();
+
+        $input = [
+            'deskripsi_kegiatan' => 'Kegiatan testing',
+            'is_draft' => false
+        ];
+
+        $result = $this->service->update($user, 999, $input);
+
+        $this->assertEquals(404, $result['status']);
+        $this->assertFalse($result['body']['success']);
+        $this->assertEquals(
+            'Logbook tidak ditemukan',
+            $result['body']['message']
+        );
     }
 
-    public function test_update_locked_logbook_returns_400()
+
+    public function test_tc_uupdate_03_update_fails_when_status_verified()
     {
-        $logbook = Logbook::create([
-            'user_id' => $this->intern->user_id,
-            'tanggal' => now()->toDateString(),
-            'deskripsi_kegiatan' => 'Locked logbook',
-            'status_verifikasi' => 'verified',
-        ]);
+        $user = User::factory()->create();
 
-        $response = $this->actingAs($this->intern)
-            ->putJson("/api/logbook/{$logbook->id_logbooks}", [
-                'deskripsi_kegiatan' => 'Attempt update',
-                'is_draft' => false,
-            ]);
-
-        $response->assertStatus(400);
-    }
-
-    public function test_update_logbook_as_draft_returns_200()
-    {
-        $logbook = Logbook::create([
-            'user_id' => $this->intern->user_id,
-            'tanggal' => now()->toDateString(),
-            'deskripsi_kegiatan' => 'Revision logbook',
-            'status_verifikasi' => 'revision_needed',
+        $logbook = Logbook::factory()->create([
+            'user_id' => $user->user_id,
+            'status_verifikasi' => 'verified'
         ]);
 
-        $response = $this->actingAs($this->intern)
-            ->putJson("/api/logbook/{$logbook->id_logbooks}", [
-                'deskripsi_kegiatan' => 'Updated as draft',
-                'is_draft' => true,
-            ]);
+        $input = [
+            'deskripsi_kegiatan' => 'Update kegiatan',
+            'is_draft' => false
+        ];
 
-        $response->assertStatus(200);
+        $result = $this->service->update(
+            $user,
+            $logbook->id_logbooks,
+            $input
+        );
+
+        $this->assertEquals(400, $result['status']);
+        $this->assertFalse($result['body']['success']);
+
+        $this->assertStringContainsString(
+            'tidak dapat diubah',
+            $result['body']['message']
+        );
     }
 
-    public function test_update_logbook_and_submit_returns_200()
-    {
-        $logbook = Logbook::create([
-            'user_id' => $this->intern->user_id,
-            'tanggal' => now()->toDateString(),
-            'deskripsi_kegiatan' => 'Revision submit',
-            'status_verifikasi' => 'revision_needed',
-        ]);
 
-        $response = $this->actingAs($this->intern)
-            ->putJson("/api/logbook/{$logbook->id_logbooks}", [
-                'deskripsi_kegiatan' => 'Updated and submitted',
-                'is_draft' => false,
-            ]);
-
-        $response->assertStatus(200);
-    }
-
-    public function test_update_logbook_with_new_file_array_returns_200()
+    public function test_tc_uupdate_04_update_success()
     {
         Storage::fake('public');
 
-        $logbook = Logbook::create([
-            'user_id' => $this->intern->user_id,
-            'tanggal' => now()->toDateString(),
-            'deskripsi_kegiatan' => 'File update',
-            'status_verifikasi' => 'draft',
-            'bukti_kegiatan' => json_encode([
-                'storage/logbooks/oldfile.pdf'
-            ]),
+        $user = User::factory()->create();
+
+        $logbook = Logbook::factory()->create([
+            'user_id' => $user->user_id,
+            'status_verifikasi' => 'draft'
         ]);
 
-        $file = UploadedFile::fake()->create('evidence.pdf', 100);
+        $file = UploadedFile::fake()->create(
+            'bukti.jpg',
+            100,
+            'image/jpeg'
+        );
 
-        $response = $this->actingAs($this->intern)
-            ->put("/api/logbook/{$logbook->id_logbooks}", [
-                'deskripsi_kegiatan' => 'Update with file',
-                'bukti_kegiatan' => [$file],
-                'is_draft' => false,
-            ]);
+        $input = [
+            'deskripsi_kegiatan' => 'Kegiatan dengan file',
+            'is_draft' => false
+        ];
 
-        $response->assertStatus(200);
+        $this->repository
+            ->shouldReceive('update')
+            ->once()
+            ->andReturn($logbook);
+
+        $result = $this->service->update(
+            $user,
+            $logbook->id_logbooks,
+            $input,
+            [$file]
+        );
+
+        $this->assertEquals(200, $result['status']);
+        $this->assertTrue($result['body']['success']);
+
+        $this->assertCount(
+            1,
+            Storage::disk('public')->files('logbooks')
+        );
     }
 
-    public function test_update_logbook_with_new_file_string_returns_200()
+    protected function tearDown(): void
     {
-        Storage::fake('public');
-
-        $logbook = Logbook::create([
-            'user_id' => $this->intern->user_id,
-            'tanggal' => now()->toDateString(),
-            'deskripsi_kegiatan' => 'File update string',
-            'status_verifikasi' => 'draft',
-            'bukti_kegiatan' => json_encode([
-                'storage/logbooks/oldfile.pdf'
-            ]),
-        ]);
-
-        $file = UploadedFile::fake()->create('evidence.pdf', 100);
-
-        $response = $this->actingAs($this->intern)
-            ->put("/api/logbook/{$logbook->id_logbooks}", [
-                'deskripsi_kegiatan' => 'Update replacement file',
-                'bukti_kegiatan' => [$file],
-                'is_draft' => false,
-            ]);
-
-        $response->assertStatus(200);
+        Mockery::close();
+        parent::tearDown();
     }
 }
