@@ -1,0 +1,251 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-1234-56789abcdef0",
+		"name": "Integration Test: Mentor -> LogbookService (Bagianku)",
+		"description": "Koleksi Postman khusus untuk menguji interaksi MentorVerification -> LogbookService beserta mekanisme penguncian (Locking Mechanism).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "TC-INVERIFY-01: Mentor menyetujui logbook (Verified)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Status logbook berubah menjadi verified\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data.status_verifikasi).to.eql(\"verified\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{mentor_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"status_verifikasi\": \"verified\",\n    \"feedback\": \"Sangat baik, silakan dilanjutkan.\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/logbooks/1/verify",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"mentor",
+						"logbook",
+						"1",
+						"verify"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "TC-INUPDATE-01: Intern mencoba edit logbook verified (Locking)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400 Bad Request / 403 Forbidden\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([400, 403]);",
+							"});",
+							"",
+							"pm.test(\"Mendapatkan pesan error penolakan\", function () {",
+							"    pm.expect(pm.response.text()).to.include(\"tidak dapat diubah\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{intern_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"deskripsi_kegiatan\": \"Mencoba ngedit diam-diam\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/logbooks/1",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"logbook",
+						"1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "TC-INVERIFY-02: Mentor meminta revisi logbook",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Status berubah menjadi revision_needed\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data.status_verifikasi).to.eql(\"revision_needed\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{mentor_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"status_verifikasi\": \"revision_needed\",\n    \"feedback\": \"Mohon perbaiki lampiran fotonya\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/logbooks/2/verify",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"mentor",
+						"logbook",
+						"2",
+						"verify"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "TC-INUPDATE-02: Intern resubmit logbook yang direvisi",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Perubahan tersimpan dan status kembali jadi pending\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data.status_verifikasi).to.eql(\"pending\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{intern_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"deskripsi_kegiatan\": \"Sudah saya perbaiki sesuai revisi mentor\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/logbooks/2",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"logbook",
+						"2"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000"
+		},
+		{
+			"key": "mentor_token",
+			"value": "16|xB0FRkDbLjYxTwNMqrWF0isCbxp1hohKKKnW2t7Va2a27f66"
+		},
+		{
+			"key": "intern_token",
+			"value": "15|5Iscr6DEfrLnhHQZ10sL0JnnngBpptQFOASnCluV43dab68a"
+		}
+	]
+}

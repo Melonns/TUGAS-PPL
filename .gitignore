@@ -70,6 +70,10 @@ Desktop.ini
 composer.lock
 
 # Misc
+.pdf
 .gitkeep
 *.md~
+*.md
 backend-backup/
+Proyek Akhir PPL_Kelompok 1_3.pdf
+*.puml

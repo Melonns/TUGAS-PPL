@@ -33,8 +33,4 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logbook/{id}/verify', [LogbookController::class, 'verify'])->whereNumber('id');
     });
 
-    // Admin routes
-    Route::prefix('admin')->group(function () {
-        Route::get('/logbook', [LogbookController::class, 'listAll']);
-    });
 });
