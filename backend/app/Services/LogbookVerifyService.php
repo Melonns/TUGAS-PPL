@@ -2,11 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\Logbook;
 use App\Models\User;
 use App\Repositories\LogbookRepositoryInterface;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class LogbookVerifyService
 {
@@ -18,8 +16,12 @@ class LogbookVerifyService
      * Verify logbook (set to verified or revision_needed)
      * Returns ['status' => int, 'body' => array]
      */
-    public function verify(User $verifier, int $id, string $statusVerifikasi, ?string $feedback = null): array
-    {
+    public function verify(
+        User $verifier,
+        int $id,
+        string $statusVerifikasi,
+        ?string $feedback = null
+    ): array {
         // Validation
         if (!in_array($statusVerifikasi, ['verified', 'revision_needed'])) {
             return [
@@ -27,7 +29,11 @@ class LogbookVerifyService
                 'body' => [
                     'success' => false,
                     'message' => 'Status verifikasi harus verified atau revision_needed',
-                    'errors' => ['status_verifikasi' => ['Status verifikasi harus verified atau revision_needed']]
+                    'errors' => [
+                        'status_verifikasi' => [
+                            'Status verifikasi harus verified atau revision_needed'
+                        ]
+                    ]
                 ]
             ];
         }
@@ -38,13 +44,17 @@ class LogbookVerifyService
                 'body' => [
                     'success' => false,
                     'message' => 'Feedback maksimal 500 karakter',
-                    'errors' => ['feedback' => ['Feedback maksimal 500 karakter']]
+                    'errors' => [
+                        'feedback' => [
+                            'Feedback maksimal 500 karakter'
+                        ]
+                    ]
                 ]
             ];
         }
 
         // Find logbook
-        $logbooks = Logbook::with('user')->find($id);
+        $logbooks = $this->repository->findById($id);
 
         if (!$logbooks) {
             return [
@@ -57,11 +67,10 @@ class LogbookVerifyService
         }
 
         // Check authorization
-        $isBimbingan = DB::table('intern_mentors')
-            ->where('mentor_id', $verifier->user_id)
-            ->where('intern_id', $logbooks->user_id)
-            ->where('is_active', true)
-            ->exists();
+        $isBimbingan = $this->repository->isMentorAssigned(
+            $verifier->user_id,
+            $logbooks->user_id
+        );
 
         if (!$verifier->isAdmin() && !$isBimbingan) {
             return [
@@ -86,10 +95,13 @@ class LogbookVerifyService
             $updateData['revision_by'] = $verifier->user_id;
         }
 
-        $this->repository->update($id, $updateData);
+        $updatedLogbook = $this->repository->update(
+            $id,
+            $updateData
+        );
 
-        $statusMessage = $statusVerifikasi === 'verified' 
-            ? 'Logbook berhasil diverifikasi' 
+        $statusMessage = $statusVerifikasi === 'verified'
+            ? 'Logbook berhasil diverifikasi'
             : 'Logbook perlu revisi';
 
         return [
@@ -97,7 +109,7 @@ class LogbookVerifyService
             'body' => [
                 'success' => true,
                 'message' => $statusMessage,
-                'data' => $logbooks->fresh(['user', 'verifier'])
+                'data' => $updatedLogbook
             ]
         ];
     }

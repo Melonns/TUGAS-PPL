@@ -7,9 +7,26 @@ use App\Models\User;
 
 interface LogbookRepositoryInterface
 {
-    public function findExistingForUserOnDate(User $user, string $tanggal): ?Logbook;
+    public function findExistingForUserOnDate(
+        User $user,
+        string $tanggal
+    ): ?Logbook;
 
-    public function create(array $attributes): Logbook;
+    public function findById(
+        int $id
+    ): ?Logbook;
 
-    public function update(int $id, array $attributes): Logbook;
+    public function isMentorAssigned(
+        int $mentorId,
+        int $internId
+    ): bool;
+
+    public function create(
+        array $attributes
+    ): Logbook;
+
+    public function update(
+        int $id,
+        array $attributes
+    ): Logbook;
 }
